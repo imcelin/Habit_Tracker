@@ -1,5 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
+import cors from "cors";
 
 import { PORT, mongoDBURL } from "./config.js";
 import dailySummaryRoutes from "./Routy/dailySummaryRoutes.js";
@@ -7,6 +8,7 @@ import taskRoutes from "./Routy/taskRoutes.js";
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 app.use("/daily-summary", dailySummaryRoutes);

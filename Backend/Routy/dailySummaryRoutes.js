@@ -70,7 +70,7 @@ router.get("/get/:id", async (req, res) => {
 
 router.get("/list", async (req, res) => {
   try {
-    const summaryList = await DailySummary.find({});
+    const summaryList = await DailySummary.find({}).sort({ date: -1 });
 
     return res.status(200).json({
       message: "Daily summary list loaded successfully.",

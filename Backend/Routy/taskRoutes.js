@@ -5,6 +5,21 @@ import { Task } from "../Model/TaskModel.js";
 
 const router = express.Router();
 
+async function findOrCreateSummaryByDate(date) {
+  let summary = await DailySummary.findOne({ date });
+
+  if (!summary) {
+    summary = await DailySummary.create({
+      date,
+      completedTasks: 0,
+      pendingTasks: 0,
+      progressRate: 0
+    });
+  }
+
+  return summary;
+}
+
 async function recalculateDailySummary(summaryId) {
   const summary = await DailySummary.findOne({ id: summaryId });
 
@@ -30,10 +45,6 @@ async function recalculateDailySummary(summaryId) {
 }
 
 function validateCreateBody(body) {
-  if (!body.summaryId || typeof body.summaryId !== "string") {
-    return "Field 'summaryId' is required and must be a string.";
-  }
-
   if (!body.name || typeof body.name !== "string") {
     return "Field 'name' is required and must be a string.";
   }
@@ -58,10 +69,6 @@ function validateCreateBody(body) {
 }
 
 function validateUpdateBody(body) {
-  if (body.summaryId !== undefined && typeof body.summaryId !== "string") {
-    return "Field 'summaryId' must be a string.";
-  }
-
   if (body.name !== undefined && typeof body.name !== "string") {
     return "Field 'name' must be a string.";
   }
@@ -93,11 +100,7 @@ router.post("/create", async (req, res) => {
       return res.status(400).json({ message: validationError });
     }
 
-    const relatedSummary = await DailySummary.findOne({ id: req.body.summaryId });
-
-    if (!relatedSummary) {
-      return res.status(404).json({ message: "Daily summary for this task was not found." });
-    }
+    const relatedSummary = await findOrCreateSummaryByDate(req.body.dueDate);
 
     const status = req.body.status || "pending";
     let completionTime = req.body.completionTime !== undefined ? req.body.completionTime : null;
@@ -111,7 +114,7 @@ router.post("/create", async (req, res) => {
     }
 
     const newTask = await Task.create({
-      summaryId: req.body.summaryId,
+      summaryId: relatedSummary.id,
       name: req.body.name,
       description: req.body.description || "",
       dueDate: req.body.dueDate,
@@ -119,7 +122,7 @@ router.post("/create", async (req, res) => {
       completionTime
     });
 
-    await recalculateDailySummary(req.body.summaryId);
+    await recalculateDailySummary(relatedSummary.id);
 
     return res.status(201).json({
       message: "Task created successfully.",
@@ -155,7 +158,7 @@ router.get("/get/:id", async (req, res) => {
 
 router.get("/list", async (req, res) => {
   try {
-    const taskList = await Task.find({});
+    const taskList = await Task.find({}).sort({ createdAt: -1 });
 
     return res.status(200).json({
       message: "Task list loaded successfully.",
@@ -183,12 +186,9 @@ router.put("/update/:id", async (req, res) => {
       return res.status(404).json({ message: "Task not found." });
     }
 
-    const newSummaryId = req.body.summaryId || existingTask.summaryId;
-    const relatedSummary = await DailySummary.findOne({ id: newSummaryId });
-
-    if (!relatedSummary) {
-      return res.status(404).json({ message: "Daily summary for this task was not found." });
-    }
+    const nextDueDate = req.body.dueDate !== undefined ? req.body.dueDate : existingTask.dueDate;
+    const relatedSummary = await findOrCreateSummaryByDate(nextDueDate);
+    const newSummaryId = relatedSummary.id;
 
     const status = req.body.status || existingTask.status;
     let completionTime =
